@@ -1,3 +1,5 @@
+import { auth } from './firebase';
+
 export interface User {
   id: number;
   email: string;
@@ -63,18 +65,21 @@ class ApiClient {
     options: RequestInit = {}
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
-    const token = this.getToken();
-    
-    const config: RequestInit = {
-      ...options,
-      headers: {
-        ...options.headers,
-        ...(token && { Authorization: `Bearer ${token}` }),
-        ...(options.body && !(options.body instanceof FormData) && {
-          'Content-Type': 'application/json',
-        }),
-      },
+    // Get Firebase ID token if a user is signed in
+    let idToken: string | null = null;
+    if (auth.currentUser) {
+      idToken = await auth.currentUser.getIdToken();
+    }
+
+    const headers: Record<string, string> = {
+      ...options.headers as Record<string, string>,
+      ...(idToken && { Authorization: `Bearer ${idToken}` }),
     };
+    // Set JSON content type when needed
+    if (options.body && !(options.body instanceof FormData)) {
+      headers['Content-Type'] = 'application/json';
+    }
+    const config: RequestInit = { ...options, headers };
 
     const response = await fetch(url, config);
     

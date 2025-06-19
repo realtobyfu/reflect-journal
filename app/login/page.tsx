@@ -21,7 +21,7 @@ export default function LoginPage() {
     
     try {
       await login(email, password);
-      router.push('/dashboard');
+      // Navigation is handled by the auth context
     } catch (error) {
       console.error('Login failed:', error);
     } finally {

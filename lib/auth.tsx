@@ -2,14 +2,16 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { auth } from '@/lib/firebase';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut as firebaseSignOut } from 'firebase/auth';
 import { apiClient, User } from '@/lib/api-client';
 import { useRouter } from 'next/navigation';
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (username: string, password: string) => Promise<void>;
-  register: (email: string, username: string, password: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
+  register: (email: string, password: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -21,36 +23,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
-    const loadUser = async () => {
-      const token = apiClient.getToken();
-      if (token) {
+    setLoading(true);
+    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+      if (fbUser) {
+        const idToken = await fbUser.getIdToken();
+        apiClient.setToken(idToken);
         try {
           const userData = await apiClient.getMe();
           setUser(userData);
-        } catch (error) {
+        } catch {
           apiClient.setToken(null);
+          setUser(null);
         }
+      } else {
+        apiClient.setToken(null);
+        setUser(null);
       }
       setLoading(false);
-    };
-    
-    loadUser();
+    });
+    return () => unsubscribe();
   }, []);
 
-  const login = async (username: string, password: string) => {
-    const { access_token } = await apiClient.login(username, password);
-    apiClient.setToken(access_token);
+  const login = async (email: string, password: string) => {
+    const credential = await signInWithEmailAndPassword(auth, email, password);
+    const idToken = await credential.user.getIdToken();
+    apiClient.setToken(idToken);
     const userData = await apiClient.getMe();
     setUser(userData);
     router.push('/dashboard');
   };
 
-  const register = async (email: string, username: string, password: string) => {
-    await apiClient.register({ email, username, password });
-    await login(username, password);
+  const register = async (email: string, password: string) => {
+    const credential = await createUserWithEmailAndPassword(auth, email, password);
+    const idToken = await credential.user.getIdToken();
+    apiClient.setToken(idToken);
+    const userData = await apiClient.getMe();
+    setUser(userData);
+    router.push('/dashboard');
   };
 
-  const logout = () => {
+  const logout = async () => {
+    await firebaseSignOut(auth);
     apiClient.setToken(null);
     setUser(null);
     router.push('/login');

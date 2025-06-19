@@ -15,23 +15,26 @@ export default function RegisterPage() {
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const { register } = useAuth();
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (password !== confirmPassword) {
-      alert('Passwords do not match');
+      setError('Passwords do not match');
       return;
     }
     
     setIsLoading(true);
+    setError('');
     
     try {
-      await register(email, email, password); // Using email as username for now
-      router.push('/dashboard');
-    } catch (error) {
+      await register(email, password);
+      // Navigation is handled by the auth context
+    } catch (error: any) {
       console.error('Registration failed:', error);
+      setError(error.message || 'Failed to create account. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -190,6 +193,12 @@ export default function RegisterPage() {
                 <Link href="/privacy" className="text-blue-500 hover:text-blue-600">Privacy Policy</Link>
               </span>
             </div>
+
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-600">
+                {error}
+              </div>
+            )}
 
             <Button 
               type="submit" 
