@@ -46,17 +46,9 @@ class ApiClient {
 
   setToken(token: string | null) {
     this.token = token;
-    if (token) {
-      localStorage.setItem('access_token', token);
-    } else {
-      localStorage.removeItem('access_token');
-    }
   }
 
   getToken(): string | null {
-    if (!this.token) {
-      this.token = localStorage.getItem('access_token');
-    }
     return this.token;
   }
 
@@ -65,57 +57,68 @@ class ApiClient {
     options: RequestInit = {}
   ): Promise<T> {
     const url = `${this.baseUrl}${endpoint}`;
-    // Get Firebase ID token if a user is signed in
+    
+    // Get Firebase ID token if available
     let idToken: string | null = null;
     if (auth.currentUser) {
+      try {
       idToken = await auth.currentUser.getIdToken();
+      } catch (error) {
+        console.error('Failed to get Firebase token:', error);
+      }
+    } else if (this.token) {
+      idToken = this.token;
     }
 
     const headers: Record<string, string> = {
       ...options.headers as Record<string, string>,
       ...(idToken && { Authorization: `Bearer ${idToken}` }),
     };
+
     // Set JSON content type when needed
     if (options.body && !(options.body instanceof FormData)) {
       headers['Content-Type'] = 'application/json';
     }
+
     const config: RequestInit = { ...options, headers };
+
+    try {
+      console.log('API Request:', {
+        url,
+        method: options.method || 'GET',
+        headers: { ...headers, Authorization: headers.Authorization ? '***' : undefined },
+        body: options.body
+      });
 
     const response = await fetch(url, config);
     
     if (!response.ok) {
+        const errorText = await response.text();
+        console.error('API Error Response:', {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText
+        });
+        
       if (response.status === 401) {
         this.setToken(null);
+          if (typeof window !== 'undefined') {
         window.location.href = '/login';
       }
-      throw new Error(`API Error: ${response.statusText}`);
+        }
+        throw new Error(`API Error: ${response.statusText} - ${errorText}`);
     }
     
-    return response.json();
+      const result = await response.json();
+      console.log('API Success Response:', result);
+      return result;
+    } catch (error) {
+      console.error('API request failed:', error);
+      throw error;
+    }
   }
 
-  // Auth endpoints
-  async register(data: { email: string; username: string; password: string }): Promise<User> {
-    return this.request('/api/auth/register', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async login(username: string, password: string): Promise<{ access_token: string; token_type: string }> {
-    const formData = new URLSearchParams();
-    formData.append('username', username);
-    formData.append('password', password);
-    
-    return this.request('/api/auth/login', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: formData.toString(),
-    });
-  }
-
+  // Get current user (Firebase creates user automatically)
   async getMe(): Promise<User> {
     return this.request('/api/auth/me');
   }

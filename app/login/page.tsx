@@ -12,18 +12,36 @@ export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const { login } = useAuth();
   const router = useRouter();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setError('');
     
     try {
       await login(email, password);
+      console.log('✅ Login successful, waiting for redirect...');
       // Navigation is handled by the auth context
-    } catch (error) {
-      console.error('Login failed:', error);
+    } catch (error: any) {
+      console.error('❌ Login failed:', error);
+      let errorMessage = 'Failed to sign in. Please check your credentials.';
+      
+      if (error.code === 'auth/user-not-found') {
+        errorMessage = 'No account found with this email. Please register first.';
+      } else if (error.code === 'auth/wrong-password') {
+        errorMessage = 'Incorrect password. Please try again.';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = 'Please enter a valid email address.';
+      } else if (error.code === 'auth/too-many-requests') {
+        errorMessage = 'Too many failed attempts. Please try again later.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -98,6 +116,12 @@ export default function LoginPage() {
                 Forgot password?
               </Link>
             </div>
+
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-600">
+                {error}
+              </div>
+            )}
 
             <Button 
               type="submit" 

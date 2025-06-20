@@ -30,11 +30,24 @@ export default function RegisterPage() {
     setError('');
     
     try {
-      await register(email, password);
+      await register(email, password, firstName, lastName);
+      console.log('✅ Registration successful, waiting for redirect...');
       // Navigation is handled by the auth context
     } catch (error: any) {
-      console.error('Registration failed:', error);
-      setError(error.message || 'Failed to create account. Please try again.');
+      console.error('❌ Registration failed:', error);
+      let errorMessage = 'Failed to create account. Please try again.';
+      
+      if (error.code === 'auth/email-already-in-use') {
+        errorMessage = 'An account with this email already exists. Please sign in instead.';
+      } else if (error.code === 'auth/weak-password') {
+        errorMessage = 'Password is too weak. Please choose a stronger password.';
+      } else if (error.code === 'auth/invalid-email') {
+        errorMessage = 'Please enter a valid email address.';
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }

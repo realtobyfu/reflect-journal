@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth';
+import { apiClient, JournalEntry } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { useToast } from '@/components/ui/use-toast';
 import { 
   Calendar, 
   BookOpen, 
@@ -19,14 +21,25 @@ import {
   BarChart3, 
   Feather,
   LogOut,
-  Settings
+  Settings,
+  Save
 } from 'lucide-react';
 
 export default function DashboardPage() {
   const { user, logout } = useAuth();
+  const { toast } = useToast();
   const [activeView, setActiveView] = useState('today');
   const [selectedPrompt, setSelectedPrompt] = useState<any>(null);
   const [journalText, setJournalText] = useState('');
+  const [selectedMood, setSelectedMood] = useState<string>('');
+  const [entries, setEntries] = useState<JournalEntry[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [stats, setStats] = useState({
+    streak: 0,
+    totalEntries: 0,
+    wordsThisWeek: 0,
+    topMood: "Contemplative"
+  });
   
   const prompts = [
     { id: 1, text: "What moment from today would you want to remember in 5 years?", category: "memory" },
@@ -35,11 +48,85 @@ export default function DashboardPage() {
     { id: 4, text: "If today had a color, what would it be and why?", category: "creative" }
   ];
 
-  const stats = {
-    streak: 7,
-    totalEntries: 42,
-    wordsThisWeek: 3420,
-    topMood: "Contemplative"
+  const moods = [
+    { emoji: '😊', name: 'Happy' },
+    { emoji: '😔', name: 'Sad' },
+    { emoji: '😴', name: 'Tired' },
+    { emoji: '🤔', name: 'Thoughtful' },
+    { emoji: '😍', name: 'Excited' },
+    { emoji: '😤', name: 'Frustrated' }
+  ];
+
+  useEffect(() => {
+    if (user) {
+      loadEntries();
+      loadStats();
+    }
+  }, [user]);
+
+  const loadEntries = async () => {
+    try {
+      const data = await apiClient.getEntries({ limit: 10 });
+      setEntries(data);
+    } catch (error) {
+      console.error('Failed to load entries:', error);
+    }
+  };
+
+  const loadStats = async () => {
+    try {
+      const data = await apiClient.getStats();
+      setStats({
+        streak: data.current_streak || 0,
+        totalEntries: data.total_entries || 0,
+        wordsThisWeek: data.week_word_count || 0,
+        topMood: "Contemplative" // Could be derived from mood_distribution
+      });
+    } catch (error) {
+      console.error('Failed to load stats:', error);
+    }
+  };
+
+  const saveEntry = async () => {
+    if (!journalText.trim()) {
+      toast({
+        title: "Empty entry",
+        description: "Please write something before saving.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      const moodName = moods.find(m => m.emoji === selectedMood)?.name;
+      await apiClient.createEntry({
+        content: journalText,
+        mood: moodName,
+        tags: selectedPrompt ? [selectedPrompt.category] : []
+      });
+      
+      toast({
+        title: "Entry saved!",
+        description: "Your journal entry has been saved successfully.",
+      });
+      
+      // Clear form and reload data
+      setJournalText('');
+      setSelectedMood('');
+      setSelectedPrompt(null);
+      loadEntries();
+      loadStats();
+    } catch (error: any) {
+      console.error('Failed to save entry:', error);
+      toast({
+        title: "Failed to save",
+        description: error.message || "Something went wrong. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const NavButton = ({ view, icon: Icon, label, active }: any) => (
@@ -148,12 +235,16 @@ export default function DashboardPage() {
               
               {/* Mood Selector */}
               <div className="flex gap-3 mb-6">
-                {['😊', '😔', '😴', '🤔', '😍', '😤'].map((mood, i) => (
+                {moods.map((mood, i) => (
                   <button
                     key={i}
-                    className="w-12 h-12 rounded-lg bg-white hover:bg-slate-50 transition-all hover:scale-110 flex items-center justify-center text-2xl shadow-sm border border-slate-200"
+                    onClick={() => setSelectedMood(mood.emoji)}
+                    className={`w-12 h-12 rounded-lg bg-white hover:bg-slate-50 transition-all hover:scale-110 flex items-center justify-center text-2xl shadow-sm border-2 ${
+                      selectedMood === mood.emoji ? 'border-blue-400 bg-blue-50' : 'border-slate-200'
+                    }`}
+                    title={mood.name}
                   >
-                    {mood}
+                    {mood.emoji}
                   </button>
                 ))}
               </div>
@@ -196,101 +287,30 @@ export default function DashboardPage() {
               />
               <div className="mt-4 flex justify-between items-center">
                 <div className="flex gap-2">
-                  <Button variant="outline" className="bg-slate-100 hover:bg-slate-200 text-slate-700">
-                    Save as Draft
-                  </Button>
-                  <Button variant="outline" className="bg-slate-100 hover:bg-slate-200 text-slate-700">
-                    Add Photo
+                  <Button 
+                    variant="outline" 
+                    className="bg-slate-100 hover:bg-slate-200 text-slate-700"
+                    onClick={() => {
+                      setJournalText('');
+                      setSelectedMood('');
+                      setSelectedPrompt(null);
+                    }}
+                  >
+                    Clear
                   </Button>
                 </div>
-                <Button className="bg-blue-500 hover:bg-blue-600 text-white flex items-center gap-2">
-                  <BookOpen size={16} />
-                  Complete Entry
+                <Button 
+                  onClick={saveEntry}
+                  disabled={isLoading || !journalText.trim()}
+                  className="bg-blue-500 hover:bg-blue-600 text-white flex items-center gap-2"
+                >
+                  {isLoading ? (
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  ) : (
+                    <Save size={16} />
+                  )}
+                  Save Entry
                 </Button>
-              </div>
-            </div>
-            
-            {/* AI Assistant */}
-            <div className="mt-6 bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl p-6 border border-purple-100">
-              <div className="flex items-start gap-4">
-                <div className="w-10 h-10 bg-white rounded-full flex items-center justify-center shadow-sm">
-                  <Brain className="text-purple-500" size={20} />
-                </div>
-                <div className="flex-1">
-                  <h4 className="font-semibold mb-2 text-slate-900">Reflection Assistant</h4>
-                  <p className="text-sm text-slate-600 mb-3">
-                    I noticed you've been writing about similar themes this week. Would you like to explore what "growth through challenges" means to you?
-                  </p>
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="outline" className="bg-white hover:bg-slate-50">
-                      Yes, let's explore
-                    </Button>
-                    <Button size="sm" variant="outline" className="bg-white hover:bg-slate-50">
-                      Show me patterns
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-        
-        {activeView === 'insights' && (
-          <div className="max-w-6xl mx-auto">
-            <h2 className="text-3xl font-bold mb-8 text-slate-900">Your Journey Insights</h2>
-            
-            {/* Stats Grid */}
-            <div className="grid grid-cols-4 gap-6 mb-8">
-              <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 shadow-sm border border-slate-200">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-slate-600">Total Entries</span>
-                  <BookOpen size={20} className="text-blue-500" />
-                </div>
-                <p className="text-3xl font-bold text-slate-900">{stats.totalEntries}</p>
-              </div>
-              
-              <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 shadow-sm border border-slate-200">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-slate-600">Words This Week</span>
-                  <BarChart3 size={20} className="text-green-500" />
-                </div>
-                <p className="text-3xl font-bold text-slate-900">{stats.wordsThisWeek.toLocaleString()}</p>
-              </div>
-              
-              <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 shadow-sm border border-slate-200">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-slate-600">Current Streak</span>
-                  <TrendingUp size={20} className="text-orange-500" />
-                </div>
-                <p className="text-3xl font-bold text-slate-900">{stats.streak} days</p>
-              </div>
-              
-              <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 shadow-sm border border-slate-200">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-slate-600">Top Mood</span>
-                  <Heart size={20} className="text-pink-500" />
-                </div>
-                <p className="text-xl font-bold text-slate-900">{stats.topMood}</p>
-              </div>
-            </div>
-            
-            {/* Mood Chart Placeholder */}
-            <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 shadow-sm border border-slate-200 mb-6">
-              <h3 className="text-lg font-semibold mb-4 text-slate-900">Emotional Journey</h3>
-              <div className="h-64 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg flex items-center justify-center">
-                <p className="text-slate-500">Mood tracking visualization coming soon</p>
-              </div>
-            </div>
-            
-            {/* Recent Themes */}
-            <div className="bg-white/80 backdrop-blur-sm rounded-xl p-6 shadow-sm border border-slate-200">
-              <h3 className="text-lg font-semibold mb-4 text-slate-900">Recurring Themes</h3>
-              <div className="flex flex-wrap gap-2">
-                {['Growth', 'Relationships', 'Creativity', 'Work-Life Balance', 'Self-Discovery', 'Gratitude'].map((theme) => (
-                  <span key={theme} className="px-4 py-2 bg-blue-100 text-blue-700 rounded-full text-sm font-medium">
-                    {theme}
-                  </span>
-                ))}
               </div>
             </div>
           </div>
@@ -298,12 +318,53 @@ export default function DashboardPage() {
 
         {activeView === 'calendar' && (
           <div className="max-w-4xl mx-auto">
-            <h2 className="text-3xl font-bold mb-8 text-slate-900">Past Entries</h2>
-            <div className="bg-white/80 backdrop-blur-sm rounded-xl p-8 shadow-sm border border-slate-200">
-              <div className="text-center py-12">
-                <Calendar className="w-16 h-16 text-slate-400 mx-auto mb-4" />
-                <h3 className="text-xl font-semibold text-slate-900 mb-2">Calendar View Coming Soon</h3>
-                <p className="text-slate-600">Browse through your past reflections and see your journey over time</p>
+            <h2 className="text-3xl font-bold text-slate-900 mb-6">Past Entries</h2>
+            <div className="space-y-4">
+              {entries.map((entry) => (
+                <div key={entry.id} className="bg-white rounded-lg p-6 shadow-sm border border-slate-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <span className="text-sm text-slate-500">
+                        {new Date(entry.created_at).toLocaleDateString()}
+                      </span>
+                      {entry.mood && (
+                        <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm">
+                          {entry.mood}
+                        </span>
+                      )}
+                </div>
+                    <span className="text-sm text-slate-500">{entry.word_count} words</span>
+                  </div>
+                  <p className="text-slate-700 leading-relaxed">
+                    {entry.content.length > 200 ? `${entry.content.substring(0, 200)}...` : entry.content}
+                  </p>
+                </div>
+              ))}
+              {entries.length === 0 && (
+                <div className="text-center py-12 text-slate-500">
+                  <BookOpen size={48} className="mx-auto mb-4 opacity-50" />
+                  <p>No entries yet. Start writing your first reflection!</p>
+              </div>
+              )}
+            </div>
+          </div>
+        )}
+        
+        {activeView === 'insights' && (
+          <div className="max-w-4xl mx-auto">
+            <h2 className="text-3xl font-bold text-slate-900 mb-6">Insights</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="bg-white rounded-lg p-6 shadow-sm border border-slate-200">
+                <h3 className="font-semibold text-slate-900 mb-2">Total Entries</h3>
+                <p className="text-3xl font-bold text-blue-500">{stats.totalEntries}</p>
+              </div>
+              <div className="bg-white rounded-lg p-6 shadow-sm border border-slate-200">
+                <h3 className="font-semibold text-slate-900 mb-2">Words This Week</h3>
+                <p className="text-3xl font-bold text-green-500">{stats.wordsThisWeek}</p>
+              </div>
+              <div className="bg-white rounded-lg p-6 shadow-sm border border-slate-200">
+                <h3 className="font-semibold text-slate-900 mb-2">Current Streak</h3>
+                <p className="text-3xl font-bold text-purple-500">{stats.streak} days</p>
               </div>
             </div>
           </div>
@@ -311,13 +372,11 @@ export default function DashboardPage() {
 
         {activeView === 'themes' && (
           <div className="max-w-4xl mx-auto">
-            <h2 className="text-3xl font-bold mb-8 text-slate-900">Explore Themes</h2>
-            <div className="bg-white/80 backdrop-blur-sm rounded-xl p-8 shadow-sm border border-slate-200">
-              <div className="text-center py-12">
-                <Sparkles className="w-16 h-16 text-slate-400 mx-auto mb-4" />
-                <h3 className="text-xl font-semibold text-slate-900 mb-2">Theme Analysis Coming Soon</h3>
-                <p className="text-slate-600">Discover patterns and recurring themes in your reflective journey</p>
-              </div>
+            <h2 className="text-3xl font-bold text-slate-900 mb-6">Themes</h2>
+            <div className="bg-white rounded-lg p-6 shadow-sm border border-slate-200">
+              <p className="text-slate-500 text-center py-8">
+                Theme analysis coming soon! We'll analyze your entries to identify patterns and recurring themes.
+              </p>
             </div>
           </div>
         )}
