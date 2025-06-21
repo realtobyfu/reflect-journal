@@ -4,6 +4,8 @@ export interface User {
   id: number;
   email: string;
   username: string;
+  first_name?: string;
+  last_name?: string;
   is_active: boolean;
   created_at: string;
 }
@@ -121,6 +123,20 @@ class ApiClient {
   // Get current user (Firebase creates user automatically)
   async getMe(): Promise<User> {
     return this.request('/api/auth/me');
+  }
+
+  // Update current user profile
+  async updateMe(data: {
+    first_name?: string;
+    last_name?: string;
+    email?: string;
+    username?: string;
+    password?: string;
+  }): Promise<User> {
+    return this.request('/api/auth/me', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
   }
 
   // Journal entries

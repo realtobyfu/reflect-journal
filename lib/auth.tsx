@@ -18,6 +18,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (email: string, password: string, firstName?: string, lastName?: string) => Promise<void>;
   logout: () => Promise<void>;
+  updateProfile: (data: { first_name?: string; last_name?: string; email?: string; username?: string; password?: string }) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -114,7 +115,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       console.log('✅ Firebase registration successful:', userCredential.user.email);
-      // onAuthStateChanged and routing effect handle the redirect
+      // Persist user details to backend
+      const firebaseUser = userCredential.user;
+      const idToken = await firebaseUser.getIdToken(true);
+      apiClient.setToken(idToken);
+      await apiClient.request('/api/auth/register', {
+        method: 'POST',
+        body: JSON.stringify({
+          email,
+          username: email.split('@')[0],
+          password,
+          first_name: firstName,
+          last_name: lastName,
+          firebase_uid: firebaseUser.uid
+        })
+      });
+      console.log('✅ Backend registration successful');
     } catch (error) {
       console.error('❌ Registration failed:', error);
       throw error;
@@ -132,6 +148,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  const updateProfile = async (data: { first_name?: string; last_name?: string; email?: string; username?: string; password?: string }) => {
+    if (!user) {
+      throw new Error('Not authenticated');
+    }
+    try {
+      const updatedUser = await apiClient.updateMe(data);
+      setUser(updatedUser);
+    } catch (error) {
+      console.error('❌ Update profile failed:', error);
+      throw error;
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -141,7 +170,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, updateProfile }}>
       {children}
     </AuthContext.Provider>
   );

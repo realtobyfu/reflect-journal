@@ -22,13 +22,15 @@ import {
   Feather,
   LogOut,
   Settings,
-  Save
+  Save,
+  MapPin
 } from 'lucide-react';
+import Link from 'next/link';
 
 export default function DashboardPage() {
   const { user, logout } = useAuth();
   const { toast } = useToast();
-  const [activeView, setActiveView] = useState('today');
+  const [activeView, setActiveView] = useState<string>('today');
   const [selectedPrompt, setSelectedPrompt] = useState<any>(null);
   const [journalText, setJournalText] = useState('');
   const [selectedMood, setSelectedMood] = useState<string>('');
@@ -40,6 +42,8 @@ export default function DashboardPage() {
     wordsThisWeek: 0,
     topMood: "Contemplative"
   });
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const [location, setLocation] = useState<{ lat: number; lng: number; place_name: string } | null>(null);
   
   const prompts = [
     { id: 1, text: "What moment from today would you want to remember in 5 years?", category: "memory" },
@@ -100,11 +104,16 @@ export default function DashboardPage() {
     setIsLoading(true);
     try {
       const moodName = moods.find(m => m.emoji === selectedMood)?.name;
-      await apiClient.createEntry({
+      const newEntry = await apiClient.createEntry({
         content: journalText,
         mood: moodName,
-        tags: selectedPrompt ? [selectedPrompt.category] : []
+        tags: selectedPrompt ? [selectedPrompt.category] : [],
+        location: location || undefined
       });
+      // upload attachments
+      for (const file of attachments) {
+        await apiClient.uploadAttachment(newEntry.id, file);
+      }
       
       toast({
         title: "Entry saved!",
@@ -115,6 +124,8 @@ export default function DashboardPage() {
       setJournalText('');
       setSelectedMood('');
       setSelectedPrompt(null);
+      setAttachments([]);
+      setLocation(null);
       loadEntries();
       loadStats();
     } catch (error: any) {
@@ -152,7 +163,9 @@ export default function DashboardPage() {
           </div>
           <p className="text-sm text-slate-600">Your daily mindfulness companion</p>
           {user && (
-            <p className="text-xs text-slate-500 mt-1">Welcome back, {user.email}</p>
+            <p className="text-xs text-slate-500 mt-1">
+              Welcome back, {user.first_name || user.username || user.email}
+            </p>
           )}
         </div>
         
@@ -196,10 +209,12 @@ export default function DashboardPage() {
 
         {/* User menu */}
         <div className="absolute bottom-6 left-6 right-6 space-y-2">
-          <button className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all hover:bg-slate-100 text-slate-700">
-            <Settings size={20} />
-            <span>Settings</span>
-          </button>
+          <Link href="/dashboard/settings">
+            <button className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all hover:bg-slate-100 text-slate-700">
+              <Settings size={20} />
+              <span>Settings</span>
+            </button>
+          </Link>
           <button 
             onClick={logout}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all hover:bg-red-50 text-red-600"
@@ -275,9 +290,8 @@ export default function DashboardPage() {
             
             {/* Writing Area */}
             <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-sm border border-slate-200 p-6">
-              <div className="flex items-center justify-between mb-4">
+              <div className="mb-4">
                 <h3 className="font-semibold text-slate-900">Your Reflection</h3>
-                <span className="text-sm text-slate-500">{journalText.split(' ').filter(w => w).length} words</span>
               </div>
               <Textarea
                 value={journalText}
@@ -285,6 +299,30 @@ export default function DashboardPage() {
                 placeholder={selectedPrompt ? `Reflecting on: "${selectedPrompt.text}"` : "Start writing your thoughts..."}
                 className="w-full h-64 p-4 border border-slate-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent bg-white/50"
               />
+              <div className="mt-2 flex items-center gap-4">
+                <label className="cursor-pointer text-sm text-slate-600 hover:text-slate-800 flex items-center gap-1">
+                  <Plus size={16} />
+                  <span>Add Attachment</span>
+                  <input type="file" multiple hidden onChange={(e) => e.target.files && setAttachments(Array.from(e.target.files))} />
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigator.geolocation.getCurrentPosition((pos) => {
+                      setLocation({
+                        lat: pos.coords.latitude,
+                        lng: pos.coords.longitude,
+                        place_name: `${pos.coords.latitude.toFixed(3)}, ${pos.coords.longitude.toFixed(3)}`
+                      });
+                    });
+                  }}
+                  className="text-sm text-slate-600 hover:text-slate-800 flex items-center gap-1"
+                >
+                  <MapPin size={16} />
+                  <span>Add Location</span>
+                </button>
+                {location && <span className="text-sm text-slate-500">Location: {location.place_name}</span>}
+              </div>
               <div className="mt-4 flex justify-between items-center">
                 <div className="flex gap-2">
                   <Button 
@@ -322,22 +360,25 @@ export default function DashboardPage() {
             <div className="space-y-4">
               {entries.map((entry) => (
                 <div key={entry.id} className="bg-white rounded-lg p-6 shadow-sm border border-slate-200">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm text-slate-500">
-                        {new Date(entry.created_at).toLocaleDateString()}
+                  <div className="flex items-center gap-3 mb-3">
+                    <span className="text-sm text-slate-500">
+                      {new Date(entry.created_at).toLocaleDateString()}
+                    </span>
+                    {entry.mood && (
+                      <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm">
+                        {entry.mood}
                       </span>
-                      {entry.mood && (
-                        <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-sm">
-                          {entry.mood}
-                        </span>
-                      )}
-                </div>
-                    <span className="text-sm text-slate-500">{entry.word_count} words</span>
+                    )}
                   </div>
                   <p className="text-slate-700 leading-relaxed">
                     {entry.content.length > 200 ? `${entry.content.substring(0, 200)}...` : entry.content}
                   </p>
+                  {entry.location && (
+                    <p className="mt-2 text-sm text-slate-500">Location: {entry.location.place_name}</p>
+                  )}
+                  {entry.attachments && entry.attachments.length > 0 && (
+                    <p className="mt-2 text-sm text-slate-500">Attachments: {entry.attachments.length}</p>
+                  )}
                 </div>
               ))}
               {entries.length === 0 && (
@@ -353,14 +394,10 @@ export default function DashboardPage() {
         {activeView === 'insights' && (
           <div className="max-w-4xl mx-auto">
             <h2 className="text-3xl font-bold text-slate-900 mb-6">Insights</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-white rounded-lg p-6 shadow-sm border border-slate-200">
                 <h3 className="font-semibold text-slate-900 mb-2">Total Entries</h3>
                 <p className="text-3xl font-bold text-blue-500">{stats.totalEntries}</p>
-              </div>
-              <div className="bg-white rounded-lg p-6 shadow-sm border border-slate-200">
-                <h3 className="font-semibold text-slate-900 mb-2">Words This Week</h3>
-                <p className="text-3xl font-bold text-green-500">{stats.wordsThisWeek}</p>
               </div>
               <div className="bg-white rounded-lg p-6 shadow-sm border border-slate-200">
                 <h3 className="font-semibold text-slate-900 mb-2">Current Streak</h3>
