@@ -85,6 +85,14 @@ The app will be available at http://localhost:3000
    - Photo attachments
    - Location tagging
 
+
+Frontend: No test framework currently configured. Need to add Jest + React Testing Library.
+
+Backend: No test files exist yet. Need to add pytest.
+* Frontend: npm test (after setup)
+* Backend: pytest (after setup)
+
+
 ## Docker Setup (Optional)
 
 Use the provided docker-compose.yml for easier setup:
@@ -92,6 +100,7 @@ Use the provided docker-compose.yml for easier setup:
 ```bash
 docker-compose up -d
 ```
+
 
 This will start PostgreSQL and Redis automatically.
 

@@ -16,6 +16,8 @@ export interface JournalEntry {
   content: string;
   mood?: string;
   mood_score?: number;
+  emotions?: EmotionData;
+  energy_level?: number;
   location?: {
     lat: number;
     lng: number;
@@ -27,6 +29,40 @@ export interface JournalEntry {
   created_at: string;
   updated_at: string;
   attachments: Attachment[];
+}
+
+export interface EmotionData {
+  primary: {
+    emotion: string;
+    intensity: number;
+  };
+  secondary?: string[];
+  energy: number;
+  context?: {
+    location?: string;
+    activity?: string;
+    social?: boolean;
+    trigger?: string;
+  };
+}
+
+export interface EmotionSuggestion {
+  emotion: string;
+  intensity: number;
+  reason: string;
+}
+
+export interface EmotionPattern {
+  emotion: string;
+  frequency: number;
+  avg_intensity: number;
+  trend: string;
+}
+
+export interface EmotionHistoryResponse {
+  patterns: EmotionPattern[];
+  recent_emotions: EmotionData[];
+  insights: string[];
 }
 
 export interface Attachment {
@@ -206,6 +242,140 @@ class ApiClient {
   }> {
     return this.request('/api/stats');
   }
+
+  // AI Features
+  async getDailyPrompts(): Promise<any[]> {
+    return this.request('/api/ai/prompts/daily');
+  }
+
+  async analyzeEntry(entryId: number): Promise<any> {
+    return this.request(`/api/ai/entries/${entryId}/analyze`, {
+      method: 'POST',
+    });
+  }
+
+  async getReflection(entryId: number): Promise<{ reflection: string }> {
+    return this.request(`/api/ai/entries/${entryId}/reflect`, {
+      method: 'POST',
+    });
+  }
+
+  async getInsights(): Promise<any> {
+    return this.request('/api/ai/insights');
+  }
+
+  async getThemes(limit: number = 30): Promise<any> {
+    return this.request(`/api/ai/themes?limit=${limit}`);
+  }
+
+  // Search
+  async searchEntries(params: {
+    q?: string;
+    mood?: string;
+    start_date?: string;
+    end_date?: string;
+    has_location?: boolean;
+    tags?: string;
+    sort_by?: string;
+    order?: string;
+    skip?: number;
+    limit?: number;
+  }): Promise<JournalEntry[]> {
+    const searchParams = new URLSearchParams();
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        searchParams.append(key, value.toString());
+      }
+    });
+    
+    return this.request(`/api/search/entries/search?${searchParams}`);
+  }
+
+  async getSearchSuggestions(q: string): Promise<{
+    moods: string[];
+    locations: string[];
+    tags: string[];
+  }> {
+    return this.request(`/api/search/entries/suggestions?q=${encodeURIComponent(q)}`);
+  }
+
+  async getCalendarEntries(year: number, month: number): Promise<any> {
+    return this.request(`/api/search/entries/calendar?year=${year}&month=${month}`);
+  }
+
+  // Export
+  async exportToCSV(startDate?: string, endDate?: string): Promise<Blob> {
+    const params = new URLSearchParams();
+    if (startDate) params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+    
+    const response = await fetch(
+      `${this.baseUrl}/api/export/csv?${params}`,
+      {
+        headers: {
+          Authorization: `Bearer ${await this.getAuthToken()}`,
+        },
+      }
+    );
+    
+    if (!response.ok) throw new Error('Export failed');
+    return response.blob();
+  }
+
+  async exportToPDF(startDate?: string, endDate?: string): Promise<Blob> {
+    const params = new URLSearchParams();
+    if (startDate) params.append('start_date', startDate);
+    if (endDate) params.append('end_date', endDate);
+    
+    const response = await fetch(
+      `${this.baseUrl}/api/export/pdf?${params}`,
+      {
+        headers: {
+          Authorization: `Bearer ${await this.getAuthToken()}`,
+        },
+      }
+    );
+    
+    if (!response.ok) throw new Error('Export failed');
+    return response.blob();
+  }
+
+  async exportToJSON(): Promise<Blob> {
+    const response = await fetch(
+      `${this.baseUrl}/api/export/json`,
+      {
+        headers: {
+          Authorization: `Bearer ${await this.getAuthToken()}`,
+        },
+      }
+    );
+    
+    if (!response.ok) throw new Error('Export failed');
+    return response.blob();
+  }
+
+  // Emotion System API
+  async updateEntryEmotions(entryId: number, emotionData: EmotionData): Promise<{ message: string; entry_id: number }> {
+    return this.request(`/api/emotions/entries/${entryId}/emotions`, {
+      method: 'POST',
+      body: JSON.stringify(emotionData),
+    });
+  }
+
+  async getEmotionSuggestions(): Promise<EmotionSuggestion[]> {
+    return this.request('/api/emotions/suggestions');
+  }
+
+  async getEmotionHistory(days: number = 30): Promise<EmotionHistoryResponse> {
+    return this.request(`/api/emotions/history?days=${days}`);
+  }
+
+  private async getAuthToken(): Promise<string | null> {
+    if (auth.currentUser) {
+      return auth.currentUser.getIdToken();
+    }
+    return this.token;
+  }
 }
 
-export const apiClient = new ApiClient(); 
+export const apiClient = new ApiClient();

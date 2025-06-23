@@ -1,8 +1,21 @@
+'use client';
+
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
-import { BookOpen, Brain, TrendingUp, Shield, Feather, Sparkles } from "lucide-react";
+import { BookOpen, Brain, TrendingUp, Shield, Feather, Sparkles, User } from "lucide-react";
+import { useAuth } from "@/lib/auth";
+import { useEffect } from "react";
 
 export default function Home() {
+  const { user } = useAuth();
+
+  // If user is authenticated, redirect to dashboard
+  useEffect(() => {
+    if (user) {
+      window.location.href = '/dashboard';
+    }
+  }, [user]);
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 text-slate-800">
       <nav className="border-b border-slate-200 bg-white/80 backdrop-blur-sm">
@@ -12,12 +25,23 @@ export default function Home() {
             <h1 className="text-2xl font-bold text-slate-900">Reflect</h1>
           </div>
           <div className="space-x-4">
-            <Link href="/login">
-              <Button variant="ghost" className="text-slate-600 hover:text-slate-900">Login</Button>
-            </Link>
-            <Link href="/register">
-              <Button className="bg-blue-500 hover:bg-blue-600 text-white">Get Started</Button>
-            </Link>
+            {user ? (
+              <Link href="/dashboard">
+                <Button variant="ghost" className="text-slate-600 hover:text-slate-900">
+                  <User className="w-4 h-4 mr-2" />
+                  Dashboard
+                </Button>
+              </Link>
+            ) : (
+              <>
+                <Link href="/login">
+                  <Button variant="ghost" className="text-slate-600 hover:text-slate-900">Login</Button>
+                </Link>
+                <Link href="/register">
+                  <Button className="bg-blue-500 hover:bg-blue-600 text-white">Get Started</Button>
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </nav>
