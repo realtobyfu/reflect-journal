@@ -26,6 +26,8 @@ export interface JournalEntry {
   weather?: any;
   tags: string[];
   word_count: number;
+  prompt_id?: string;
+  prompt_text?: string;
   created_at: string;
   updated_at: string;
   attachments: Attachment[];
@@ -181,6 +183,8 @@ class ApiClient {
     mood?: string;
     location?: { lat: number; lng: number; place_name: string };
     tags?: string[];
+    prompt_id?: string;
+    prompt_text?: string;
   }): Promise<JournalEntry> {
     return this.request('/api/entries/', {
       method: 'POST',
