@@ -7,7 +7,18 @@ import { Search, Calendar, Filter, ChevronLeft, ChevronRight } from 'lucide-reac
 import Link from 'next/link';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
-import { debounce } from 'lodash';
+// Simple debounce function to avoid lodash dependency
+const debounce = (func: Function, wait: number) => {
+  let timeout: NodeJS.Timeout;
+  return function executedFunction(...args: any[]) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+};
 
 const moods = [
   { value: 'amazing', label: '😊', color: 'text-green-600', bg: 'bg-green-50' },
@@ -53,7 +64,7 @@ export default function EntriesPage() {
     try {
       setIsLoading(true);
       const params: any = {
-        page,
+        skip: (page - 1) * itemsPerPage,
         limit: itemsPerPage,
       };
 
@@ -65,11 +76,15 @@ export default function EntriesPage() {
       }
 
       const response = await apiClient.getEntries(params);
-      setEntries(response.entries);
-      setTotalPages(Math.ceil(response.total / itemsPerPage));
+      // Handle API response - it returns an array directly
+      const entriesArray = Array.isArray(response) ? response : [];
+      setEntries(entriesArray);
+      setTotalPages(Math.ceil(entriesArray.length / itemsPerPage));
       setCurrentPage(page);
     } catch (error) {
       console.error('Failed to fetch entries:', error);
+      // Set empty array on error to prevent undefined issues
+      setEntries([]);
     } finally {
       setIsLoading(false);
     }

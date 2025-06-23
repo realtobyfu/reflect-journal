@@ -152,7 +152,7 @@ export default function NewEntryPage() {
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           <div className="bg-white rounded-xl shadow-sm border border-neutral-200 overflow-hidden">
             {/* Mood Display (Read-only) */}
-            {selectedMood && (
+            {/* {selectedMood && (
               <div className="px-6 py-4 bg-blue-50 border-b border-blue-100">
                 <div className="flex items-center gap-3">
                   <span className="text-2xl">
@@ -165,7 +165,7 @@ export default function NewEntryPage() {
                 </div>
               </div>
             )}
-
+ */}
             {/* Selected Prompt Display */}
             {selectedPrompt && (
               <div className="px-6 py-4 bg-purple-50 border-b border-purple-100">

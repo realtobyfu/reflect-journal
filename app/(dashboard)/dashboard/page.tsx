@@ -3,12 +3,12 @@
 import { useState, useEffect } from 'react';
 import { DashboardLayout } from '@/components/dashboard/dashboard-layout';
 import { apiClient } from '@/lib/api-client';
-import { Calendar, TrendingUp, Brain, Sparkles, ChevronRight, Sun, Cloud, Moon, Plus, Feather, BookOpen, BarChart3, Heart } from 'lucide-react';
+import { Calendar, TrendingUp, Brain, Sparkles, ChevronRight, Sun, Cloud, Moon, Plus, Feather, BookOpen, BarChart3, Heart, RefreshCw } from 'lucide-react';
 import Link from 'next/link';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
-import { getPromptsForMood, type Prompt } from '@/lib/prompts';
+import { getPromptsForMood, getRandomPrompts, type Prompt } from '@/lib/prompts';
 
 // Mood configuration
 const moods = [
@@ -122,7 +122,17 @@ export default function DashboardPage() {
 
   const handleMoodSelect = (moodValue: string) => {
     setSelectedMood(moodValue);
-    const newPrompts = getPromptsForMood(moodValue);
+    
+    // Get 2 mood-specific prompts and 2 general ones
+    const allPrompts = getPromptsForMood(''); // Get all general prompts
+    const moodPrompts = getPromptsForMood(moodValue).filter(p => p.mood === moodValue);
+    const generalPrompts = allPrompts.filter(p => !p.mood);
+    
+    // Mix 2 mood-specific + 2 general prompts
+    const selectedMoodPrompts = moodPrompts.slice(0, 2);
+    const selectedGeneralPrompts = generalPrompts.slice(0, 2);
+    const newPrompts = [...selectedMoodPrompts, ...selectedGeneralPrompts];
+    
     setPrompts(newPrompts);
     
     // Keep selected prompt if it exists in new prompts
@@ -153,6 +163,15 @@ export default function DashboardPage() {
     router.push(`/dashboard/entries/new?${params.toString()}`);
   };
 
+  const handleRefreshPrompts = () => {
+    // Get completely random prompts for variety
+    const newPrompts = getRandomPrompts(4);
+    setPrompts(newPrompts);
+    
+    // Clear selected prompt since we're getting new ones
+    setSelectedPrompt(null);
+  };
+
   return (
     <DashboardLayout activeSection="today">
       <div className={cn(
@@ -171,7 +190,6 @@ export default function DashboardPage() {
                 <p className="text-slate-600 mt-1">
                   {format(new Date(), 'EEEE, MMMM d, yyyy')}
                 </p>
-                <p className="text-slate-600 text-sm">How are you feeling today?</p>
               </div>
               <div className="flex items-center gap-2">
                 <div className="hidden sm:flex items-center gap-4 mr-4">
@@ -225,10 +243,20 @@ export default function DashboardPage() {
 
               {/* Today's Prompts */}
               <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-sm border border-slate-200 p-6">
-                <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
-                  <Sparkles size={20} className="text-purple-500" />
-                  Today's Prompts
-                </h3>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold flex items-center gap-2">
+                    <Sparkles size={20} className="text-purple-500" />
+                    Today's Prompts
+                  </h3>
+                  <button
+                    onClick={handleRefreshPrompts}
+                    className="flex items-center gap-2 px-3 py-1.5 text-sm text-purple-600 hover:text-purple-700 hover:bg-purple-50 rounded-lg transition-all duration-200"
+                    title="Get new prompts"
+                  >
+                    <RefreshCw size={16} />
+                    Refresh
+                  </button>
+                </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {prompts.slice(0, 4).map((prompt) => (
                     <button
@@ -338,7 +366,9 @@ export default function DashboardPage() {
             {/* Sidebar - Quick Stats & Actions */}
             <div className="space-y-6">
               {/* Stats Overview */}
-              <div className="bg-white/80 backdrop-blur-sm rounded-xl shadow-sm border border-slate-200 p-6">
+
+              {/* <div className="bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl p-4 text-white"> */}
+              <div className="bg-white/80 rounded-xl shadow-sm border border-slate-200 p-6">
                 <h3 className="text-lg font-semibold text-slate-900 mb-4">Your Progress</h3>
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
@@ -388,14 +418,14 @@ export default function DashboardPage() {
                 </div>
               </div>
 
-              {/* Streak Widget */}
+              {/* Streak Widget
               <div className="bg-gradient-to-r from-blue-500 to-purple-500 rounded-xl p-4 text-white">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm opacity-90">Current Streak</span>
                   <span className="text-2xl font-bold">{stats?.current_streak || 0}</span>
                 </div>
                 <div className="text-xs opacity-80">Keep it up! 🔥</div>
-              </div>
+              </div> */}
 
               {/* AI Assistant */}
               <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl p-6">
@@ -421,7 +451,7 @@ export default function DashboardPage() {
               </div>
 
               {/* Writing Tips */}
-              <div className="bg-gradient-to-br from-blue-50 to-purple-100 rounded-xl p-6 border border-blue-200">
+              <div className="bg-gradient-to-br from-blue-200 to-purple-200 rounded-xl p-6 border border-blue-200">
                 <h3 className="text-lg font-semibold text-blue-900 mb-2">💡 Tip of the day</h3>
                 <p className="text-sm text-blue-700">
                   Try to write at the same time each day. Building a routine helps make journaling a lasting habit.
